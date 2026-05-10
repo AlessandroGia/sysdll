@@ -9,7 +9,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 add_executable(sysdll
     src/sysdll.c
     src/memory/mem.c
-    src/syscall/nsyscall.c
+    src/nsyscall/nsyscall.c
 
     asm/peb.asm
     asm/syscall.asm

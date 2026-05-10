@@ -1,3 +1,3 @@
-#include "nsyscall/syscall_list.h"
+#include <stdint.h>
 
-Stub *nsyscall();
+uint32_t get_syscall_number_by_name(uint8_t *name);

@@ -1,0 +1,10 @@
+^C:\USERS\ALEXG\DESKTOP\SYSDLL\BUILD\CMAKEFILES\249CE8369A632B482AFD537EB11CF9D9\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/alexg/Desktop/sysdll -BC:/Users/alexg/Desktop/sysdll/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/alexg/Desktop/sysdll/build/sysdll.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
