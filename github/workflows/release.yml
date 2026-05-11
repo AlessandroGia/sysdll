@@ -1,0 +1,51 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build-crt -DBUILD_NO_CRT=ON
+
+      - name: Build release DLL
+        run: cmake --build build-crt
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+
+          New-Item -ItemType Directory -Force package\bin
+          New-Item -ItemType Directory -Force package\lib
+          New-Item -ItemType Directory -Force package\include
+
+          Copy-Item .\out\release\sysdll.dll package\bin\
+          Copy-Item .\out\release\sysdll.lib package\lib\
+          Copy-Item .\include\* package\include\ -Recurse
+          Copy-Item .\README.md package\
+          if (Test-Path .\LICENSE) { Copy-Item .\LICENSE package\ }
+
+          Compress-Archive -Path package\* -DestinationPath "sysdll-$version-windows-x64.zip" -Force
+
+          if (Test-Path .\out\release\sysdll.pdb) {
+            Compress-Archive -Path .\out\release\sysdll.pdb -DestinationPath "sysdll-$version-symbols.zip" -Force
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            sysdll-${{ github.ref_name }}-windows-x64.zip
+            sysdll-${{ github.ref_name }}-symbols.zip
