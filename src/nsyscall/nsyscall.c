@@ -1,20 +1,25 @@
-#include <stdio.h>
 #include <stdint.h>
-#include <stdlib.h>
 
 #include "nsyscall/nsyscall.h"
 #include "nsyscall/peb.h"
 
 #include "memory/mem.h"
-#include "nsyscall/syscall_list.h"
 
-static Stub *list_syscall;
+static const uint8_t syscall_pattern[4] = {0x4C, 0x8B, 0xD1, 0xB8};
 
-static void *get_data_directory(void *image_base)
+static void *ntdll_base = NULL;
+
+static uint32_t *funcs = NULL;
+static uint32_t *names = NULL;
+static uint16_t *ordinals = NULL;
+
+static uint32_t num_funcs = 0;
+
+static void *get_data_directory()
 {
 
-    uint32_t e_lfanew = read_u32((uint8_t *)image_base + 0x3C);
-    uint8_t *nt_headers = (uint8_t *)image_base + e_lfanew;
+    uint32_t e_lfanew = read_u32((uint8_t *)ntdll_base + 0x3C);
+    uint8_t *nt_headers = (uint8_t *)ntdll_base + e_lfanew;
     uint8_t *file_header = nt_headers + 0x04;
     uint8_t *optional_header = file_header + 0x14;
     uint8_t *export_data_directory = optional_header + 0x70;
@@ -22,16 +27,22 @@ static void *get_data_directory(void *image_base)
     return (void *)export_data_directory;
 }
 
-static void *get_export_table(void *base, void *data_directory)
+static void *get_export_table(void *data_directory)
 {
     uint32_t rva = read_u32((uint8_t *)data_directory + 0x00);
-    return (void *)((uint8_t *)base + rva);
+    return (void *)((uint8_t *)ntdll_base + rva);
 }
 
-static void *get_import_table(void *base, void *data_directory)
+static uint32_t check_syscall(void *address)
 {
-    uint32_t rva = read_u32((uint8_t *)data_directory + 0x08);
-    return (void *)((uint8_t *)base + rva);
+
+    uint8_t *entry = (uint8_t *)address;
+    for (int i = 0; i < 4; i++)
+    {
+        if (entry[i] != syscall_pattern[i])
+            return 0;
+    }
+    return read_u32((uint8_t *)address + 0x4);
 }
 
 static uint8_t check_ntdll(wchar_t *dll_name)
@@ -67,91 +78,63 @@ static void *get_ntdll_base(void *peb)
     return 0x0;
 }
 
-static uint32_t check_syscall(void *address)
+static void init()
 {
-
-    uint8_t *entry = (uint8_t *)address;
-    for (int i = 0; i < 4; i++)
-    {
-        if (entry[i] != syscall_pattern[i])
-            return 0;
-    }
-    return read_u32((uint8_t *)address + 0x4);
-}
-
-static void set_list_syscall()
-{
-
     void *peb = get_current_peb();
-    void *base = (void *)read_u64((uint8_t *)peb + 0x10);
-    void *ntdll_base = get_ntdll_base(peb);
+    ntdll_base = get_ntdll_base(peb);
 
-    void *ntdll_data_directory = get_data_directory(ntdll_base);
-    void *ntdll_export_table = get_export_table(ntdll_base, ntdll_data_directory);
-
-    Stub *head = NULL, *new = NULL, *this = NULL;
-    uint32_t syscall_n = 0;
-
-    uint32_t num_names = read_u32((uint8_t *)ntdll_export_table + 0x18);
-
-    uint32_t *funcs = (uint32_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x1C));
-    uint32_t *names = (uint32_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x20));
-    uint16_t *ordinals = (uint16_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x24));
-
-    void *name = NULL;
-    void *func = NULL;
-    for (uint32_t i = 0; i < num_names; i++)
+    if (ntdll_base)
     {
+        void *ntdll_data_directory = get_data_directory();
+        void *ntdll_export_table = get_export_table(ntdll_data_directory);
 
-        func = (uint8_t *)ntdll_base + funcs[ordinals[i]];
-        syscall_n = check_syscall(func);
-        if (syscall_n)
-        {
-            name = (uint8_t *)ntdll_base + names[i];
+        num_funcs = read_u32((uint8_t *)ntdll_export_table + 0x18);
 
-            new = (Stub *)malloc(sizeof(Stub));
-            new->name = name;
-            new->syscall_number = syscall_n;
-            new->next = NULL;
-
-            if (!head)
-                head = new;
-            else
-                this->next = new;
-            this = new;
-        }
+        funcs = (uint32_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x1C));
+        names = (uint32_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x20));
+        ordinals = (uint16_t *)((uint8_t *)ntdll_base + read_u32((uint8_t *)ntdll_export_table + 0x24));
     }
-
-    list_syscall = head;
 }
 
-uint32_t get_syscall_number_by_name(uint8_t *name)
+static uint8_t compare_names(uint8_t *name1, uint8_t *name2)
 {
 
-    if (!list_syscall)
-        set_list_syscall();
+    while (*name1 != '\0' && *name2 != '\0')
+    {
+        if (*name1 != *name2)
+            break;
+        name1++;
+        name2++;
+    }
+    if (*name1 == '\0' && *name2 == '\0')
+        return 1;
+    return 0;
+}
 
-    if (!list_syscall)
+uint32_t get_syscall_number_by_name(uint8_t *name_sys)
+{
+    if (!funcs || !names || !ordinals || !num_funcs)
+        init();
+    if (!funcs || !names || !ordinals || !num_funcs)
         return 0xFFFFFFFF;
 
-    Stub *this = list_syscall;
-    uint8_t *name1, *name2;
+    void *name_nt = NULL;
+    void *func_nt = NULL;
+    uint32_t syscall_n = 0;
+    uint32_t num = num_funcs;
 
-    while (this)
+    while (num--)
     {
-        name1 = name;
-        name2 = this->name;
-        while (*name1 != '\0' && *name2 != '\0')
-        {
-            if (*name1 != *name2)
-                break;
+        name_nt = (uint8_t *)ntdll_base + names[num];
 
-            name1++;
-            name2++;
-        }
-        if (*name1 == '\0' && *name2 == '\0')
-            return this->syscall_number;
-        this = this->next;
+        if (!compare_names(name_sys, name_nt))
+            continue;
+
+        func_nt = (uint8_t *)ntdll_base + funcs[ordinals[num]];
+        syscall_n = check_syscall(func_nt);
+
+        if (syscall_n)
+            return syscall_n;
     }
     return 0;
 }

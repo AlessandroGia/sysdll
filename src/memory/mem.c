@@ -60,13 +60,3 @@ void write_u64(void *addr, uint64_t value)
 {
     copy_bytes((uint64_t *)addr, &value, sizeof(value));
 }
-
-void zero(void *ptr, size_t size)
-{
-    uint8_t *p = (uint8_t *)ptr;
-
-    for (size_t i = 0; i < size; i++)
-    {
-        p[i] = 0;
-    }
-}

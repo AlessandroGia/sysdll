@@ -1,0 +1,6 @@
+LIBRARY sysdll
+
+EXPORTS
+    sysOpenProcess
+    sysWriteVirtualMemory
+    sysReadVirtualMemory
