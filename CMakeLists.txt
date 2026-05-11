@@ -13,7 +13,7 @@ set(OUTPUT_ROOT "${CMAKE_SOURCE_DIR}/out")
 if (MSVC)
     if (BUILD_NO_CRT)
         message(STATUS "Building NoCRT version")
-        set(OUTPUT_DIR "${OUTPUT_ROOT}/nocrt")
+        set(OUTPUT_DIR "${OUTPUT_ROOT}/release")
 
         foreach(flag_var
             CMAKE_C_FLAGS_DEBUG
@@ -58,7 +58,7 @@ if (MSVC)
 
     else()
 
-        set(OUTPUT_DIR "${OUTPUT_ROOT}/crt")
+        set(OUTPUT_DIR "${OUTPUT_ROOT}/debug")
         message(STATUS "Building with CRT version")
 
         set_source_files_properties(
