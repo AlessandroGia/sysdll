@@ -2,6 +2,10 @@
 
 sysdll is a 64-bit Windows system DLL that provides a small subset of the Windows API by directly invoking system calls. It is designed to operate without relying on the C runtime library (CRT) or the Windows API.
 
+# Requirements
+- Windows 10 or later (64-bit)
+- Visual Studio 2019 or later (for building)
+
 ## Design
 
 ### Retrieving System Call Numbers
@@ -11,15 +15,15 @@ Every process has `ntdll.dll` loaded in its address space, so sysdll retrieves s
 The system call stubs in `ntdll.dll` follow a specific structure, where the system call number is moved into the `eax` register, and the `syscall` instruction is used to transition to kernel mode. sysdll replicates this behavior by implementing its own assembly code that mimics the structure of the stubs in `ntdll.dll`, allowing it to invoke system calls directly.
 
 ## Build Instructions
-To build sysdll, you can use the provided Makefile. The Makefile defines targets for building both the `exe` debug version (CRT) and the `dll` release version (no-CRT) of sysdll.
+To build sysdll, you can use the provided Makefile. The Makefile defines targets for building both the `dll` release version (no-CRT) and the `exe` debug version (CRT) of sysdll.
 
-- To build the debug version (CRT), run:
-  ```
-  make debug
-  ```
 - To build the release dll version (no-CRT), run:
   ```
   make build
+  ```
+- To build the debug version (CRT), run:
+  ```
+  make debug
   ```
 
 After building, you can find the output DLL in the `out\release` directory. The debug version will be located in `out\debug`.
